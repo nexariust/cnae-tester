@@ -11,6 +11,7 @@ python -m pip install -r tester/requirements.txt
 ```bash
 export TESTER_SERVER_URL="https://api.cnae.top"
 export TESTER_BOOTSTRAP_TOKEN="你在控制台生成的"
+export TESTER_MAX_DOWNLOAD_SPEED_MBPS=3
 python tester/tester_client.py
 ```
 
@@ -25,7 +26,7 @@ services:
     environment:
       TESTER_SERVER_URL: https://api.cnae.top
       TESTER_BOOTSTRAP_TOKEN: 你在控制台生成的
-      TESTER_MAX_DOWNLOAD_SPEED_MBPS: 20
+      TESTER_MAX_DOWNLOAD_SPEED_MBPS: 3
       TZ: Asia/Shanghai
     volumes:
       - ./data:/data
@@ -39,6 +40,7 @@ python3 -m pip install -r tester/requirements.txt
 
 export TESTER_SERVER_URL="https://api.cnae.top"
 export TESTER_BOOTSTRAP_TOKEN="你在控制台生成的"
+export TESTER_MAX_DOWNLOAD_SPEED_MBPS=3
 
 python3 tester/tester_client.py
 ```
@@ -55,7 +57,7 @@ Type=simple
 WorkingDirectory=/opt/cnae
 Environment=TESTER_SERVER_URL=https://api.cnae.top
 Environment=TESTER_BOOTSTRAP_TOKEN=你在控制台生成的
-Environment=TESTER_MAX_DOWNLOAD_SPEED_MBPS=20
+Environment=TESTER_MAX_DOWNLOAD_SPEED_MBPS=3
 ExecStart=/usr/bin/python3 /opt/cnae/tester/tester_client.py
 Restart=always
 RestartSec=5
