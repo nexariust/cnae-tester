@@ -1,6 +1,4 @@
-# Tester Client
-
-探测节点程序已经从主程序目录中拆分出来，单独放在根目录的 `tester/` 文件夹下。
+# 探测节点
 
 ## 安装依赖
 
@@ -12,7 +10,7 @@ python -m pip install -r tester/requirements.txt
 
 ```bash
 export TESTER_SERVER_URL="https://api.cnae.top"
-export TESTER_BOOTSTRAP_TOKEN="你在控制台配置的共享口令"
+export TESTER_BOOTSTRAP_TOKEN="你在控制台生成的"
 python tester/tester_client.py
 ```
 
@@ -21,7 +19,7 @@ python tester/tester_client.py
 ```yaml
 services:
   cnae-tester:
-    image: ghcr.io/<owner>/cnae-tester:latest
+    image: ghcr.io/nexariust/cnae-tester:latest
     container_name: cnae-tester
     restart: unless-stopped
     environment:
@@ -40,7 +38,7 @@ cd /opt/cnae
 python3 -m pip install -r tester/requirements.txt
 
 export TESTER_SERVER_URL="https://api.cnae.top"
-export TESTER_BOOTSTRAP_TOKEN="你在控制台配置的共享口令"
+export TESTER_BOOTSTRAP_TOKEN="你在控制台生成的"
 
 python3 tester/tester_client.py
 ```
@@ -56,7 +54,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/cnae
 Environment=TESTER_SERVER_URL=https://api.cnae.top
-Environment=TESTER_BOOTSTRAP_TOKEN=你在控制台配置的共享口令
+Environment=TESTER_BOOTSTRAP_TOKEN=你在控制台生成的
 Environment=TESTER_MAX_DOWNLOAD_SPEED_MBPS=20
 ExecStart=/usr/bin/python3 /opt/cnae/tester/tester_client.py
 Restart=always
@@ -77,7 +75,7 @@ WantedBy=multi-user.target
 
 ## 说明
 
-- 首次启动会用共享口令换取唯一探测节点 token
+- 首次启动会用你在控制台生成的换取唯一探测节点 token
 - 控制台会在首次注册时自动分配一个 12 位探测节点名称
 - token 会缓存到本地，后续启动会自动复用
 - 删除 `tester/.tester-token` 后可重新注册一个新的探测节点身份
