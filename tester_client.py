@@ -5,6 +5,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from socket import IPPROTO_TCP, SOL_SOCKET, SO_KEEPALIVE, TCP_KEEPIDLE, TCP_KEEPINTVL, TCP_KEEPCNT
 from typing import Any, Dict
 
 import requests
@@ -192,7 +193,18 @@ def connect_ws(cfg: Config, token: str) -> websocket.WebSocket:
         f"Referer: {cfg.origin}/",
     ]
     try:
-        return websocket.create_connection(cfg.ws_url, timeout=cfg.request_timeout, header=headers)
+        ws = websocket.create_connection(cfg.ws_url, timeout=cfg.request_timeout, header=headers)
+        ws.settimeout(cfg.heartbeat_interval + 5)
+        sock = ws.sock
+        if sock is not None:
+            sock.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
+            try:
+                sock.setsockopt(IPPROTO_TCP, TCP_KEEPIDLE, 15)
+                sock.setsockopt(IPPROTO_TCP, TCP_KEEPINTVL, 5)
+                sock.setsockopt(IPPROTO_TCP, TCP_KEEPCNT, 3)
+            except OSError:
+                pass
+        return ws
     except websocket.WebSocketBadStatusException as exc:
         if exc.status_code == 401:
             raise WSAuthError("tester token required or invalid") from exc
