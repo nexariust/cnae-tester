@@ -1,5 +1,6 @@
 import json
 import os
+import select
 import subprocess
 import sys
 import time
@@ -278,10 +279,13 @@ def run_ws_session(cfg: Config, token: str) -> None:
             if now >= next_heartbeat_at:
                 send_ws_message(ws, {"type": "heartbeat"})
                 next_heartbeat_at = now + cfg.heartbeat_interval
-            ws.settimeout(cfg.heartbeat_interval + 5)
+            ready = select.select([ws.sock], [], [], cfg.heartbeat_interval + 5)
+            if not ready[0]:
+                continue
+            ws.sock.settimeout(1.0)
             try:
                 raw_message = ws.recv()
-            except websocket.WebSocketTimeoutException:
+            except (websocket.WebSocketTimeoutException, websocket.WebSocketConnectionClosedException):
                 continue
             if raw_message in (None, ""):
                 raise RuntimeError("WebSocket 连接已关闭")
