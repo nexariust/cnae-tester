@@ -193,7 +193,14 @@ def connect_ws(cfg: Config, token: str) -> websocket.WebSocket:
         f"Referer: {cfg.origin}/",
     ]
     try:
-        ws = websocket.create_connection(cfg.ws_url, timeout=cfg.request_timeout, header=headers)
+        ws = websocket.create_connection(
+            cfg.ws_url,
+            timeout=cfg.request_timeout,
+            header=headers,
+            enable_multithread=True,
+            ping_interval=int(cfg.heartbeat_interval),
+            ping_timeout=int(cfg.heartbeat_interval) + 5,
+        )
         ws.settimeout(cfg.heartbeat_interval + 5)
         sock = ws.sock
         if sock is not None:
