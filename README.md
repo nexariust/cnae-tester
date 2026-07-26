@@ -73,7 +73,7 @@ WantedBy=multi-user.target
 - `TESTER_MAX_DOWNLOAD_SPEED_MBPS`: 下载测速阶段的最大速度上限，单位 MB/s，默认 `0` 表示不限速
 - `TESTER_TOKEN_FILE`: 唯一探测节点 token 的本地缓存路径，默认 `tester/.tester-token`
 - `TESTER_HTTP_TIMEOUT`: 请求控制台接口的超时时间，默认 `30`
-- `TESTER_HEARTBEAT_INTERVAL`: WebSocket 心跳间隔，默认 `30`
+- `TESTER_HEARTBEAT_INTERVAL`: WebSocket 心跳间隔，默认 `10`
 
 ## 说明
 

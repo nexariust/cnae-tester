@@ -71,8 +71,8 @@ def build_config() -> Config:
         ws_url=build_ws_url(server_url),
         bootstrap_token=bootstrap_token,
         token_file=Path(token_file_raw).expanduser(),
-        request_timeout=to_float("TESTER_HTTP_TIMEOUT", 30.0),
-        heartbeat_interval=to_float("TESTER_HEARTBEAT_INTERVAL", 30.0),
+        request_timeout=to_float("TESTER_HTTP_TIMEOUT", 60.0),
+        heartbeat_interval=to_float("TESTER_HEARTBEAT_INTERVAL", 10.0),
         evaluator_path=script_dir / "tester_eval.py",
         origin=origin,
     )
@@ -259,8 +259,7 @@ def run_ws_session(cfg: Config, token: str) -> None:
             if now >= next_heartbeat_at:
                 send_ws_message(ws, {"type": "heartbeat"})
                 next_heartbeat_at = now + cfg.heartbeat_interval
-            timeout = max(1.0, min(next_heartbeat_at - time.monotonic(), cfg.heartbeat_interval))
-            ws.settimeout(timeout)
+            ws.settimeout(cfg.heartbeat_interval + 5)
             try:
                 raw_message = ws.recv()
             except websocket.WebSocketTimeoutException:
@@ -279,6 +278,8 @@ def run_ws_session(cfg: Config, token: str) -> None:
             if message_type == "error":
                 detail = str(message.get("message") or "").strip() or "控制台返回了错误"
                 log(f"控制台消息：{detail}")
+                continue
+            if message_type == "heartbeat_ack":
                 continue
             log(f"收到未识别消息类型：{message_type or '-'}")
     finally:
