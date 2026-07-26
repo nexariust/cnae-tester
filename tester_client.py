@@ -193,7 +193,13 @@ def connect_ws(cfg: Config, token: str) -> websocket.WebSocket:
         f"Referer: {cfg.origin}/",
     ]
     try:
-        ws = websocket.create_connection(cfg.ws_url, timeout=cfg.request_timeout, header=headers)
+        ws = websocket.create_connection(
+            cfg.ws_url,
+            timeout=cfg.request_timeout,
+            header=headers,
+            ping_interval=30,
+            ping_timeout=10,
+        )
         sock = ws.sock
         if sock is not None:
             sock.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
