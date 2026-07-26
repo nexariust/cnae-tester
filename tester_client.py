@@ -197,8 +197,6 @@ def connect_ws(cfg: Config, token: str) -> websocket.WebSocket:
             cfg.ws_url,
             timeout=cfg.request_timeout,
             header=headers,
-            ping_interval=30,
-            ping_timeout=10,
         )
         sock = ws.sock
         if sock is not None:
