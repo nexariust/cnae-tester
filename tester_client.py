@@ -194,14 +194,7 @@ def connect_ws(cfg: Config, token: str) -> websocket.WebSocket:
         f"Referer: {cfg.origin}/",
     ]
     try:
-        ws = websocket.create_connection(
-            cfg.ws_url,
-            timeout=cfg.request_timeout,
-            header=headers,
-            enable_multithread=True,
-            ping_interval=int(cfg.heartbeat_interval),
-            ping_timeout=int(cfg.heartbeat_interval) + 5,
-        )
+        ws = websocket.create_connection(cfg.ws_url, timeout=cfg.request_timeout, header=headers)
         ws.settimeout(cfg.heartbeat_interval + 5)
         sock = ws.sock
         if sock is not None:
@@ -279,9 +272,12 @@ def run_ws_session(cfg: Config, token: str) -> None:
             if now >= next_heartbeat_at:
                 send_ws_message(ws, {"type": "heartbeat"})
                 next_heartbeat_at = now + cfg.heartbeat_interval
-            ready = select.select([ws.sock], [], [], cfg.heartbeat_interval + 5)
-            if not ready[0]:
-                continue
+            try:
+                ready = select.select([ws.sock], [], [], cfg.heartbeat_interval + 5)
+                if not ready[0]:
+                    continue
+            except (TypeError, ValueError, OSError):
+                raise RuntimeError("WebSocket 连接已关闭")
             ws.sock.settimeout(1.0)
             try:
                 raw_message = ws.recv()
