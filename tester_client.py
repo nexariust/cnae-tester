@@ -195,7 +195,6 @@ def connect_ws(cfg: Config, token: str) -> websocket.WebSocket:
     ]
     try:
         ws = websocket.create_connection(cfg.ws_url, timeout=cfg.request_timeout, header=headers)
-        ws.settimeout(cfg.heartbeat_interval + 5)
         sock = ws.sock
         if sock is not None:
             sock.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
@@ -278,7 +277,6 @@ def run_ws_session(cfg: Config, token: str) -> None:
                     continue
             except (TypeError, ValueError, OSError):
                 raise RuntimeError("WebSocket 连接已关闭")
-            ws.sock.settimeout(1.0)
             try:
                 raw_message = ws.recv()
             except (websocket.WebSocketTimeoutException, websocket.WebSocketConnectionClosedException):
