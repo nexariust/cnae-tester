@@ -7,6 +7,7 @@ from functools import cmp_to_key
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlsplit, urlunsplit
 
+import dns.resolver
 import requests
 
 
@@ -37,6 +38,33 @@ def to_bool(value, fallback: bool) -> bool:
     if text in ("0", "false", "no", "off", ""):
         return False
     return fallback
+
+
+FALLBACK_DNS_SERVERS = ["223.5.5.5", "119.29.29.29", "1.1.1.1", "8.8.8.8"]
+
+
+def resolve_domain_to_ips(domain: str, query_type: str, dns_servers: Optional[List[str]] = None) -> List[str]:
+    domain = str(domain or "").strip().lower()
+    if not domain:
+        return []
+    rdtype = dns.rdatatype.AAAA if query_type == "AAAA" else dns.rdatatype.A
+    servers = [s.strip() for s in (dns_servers or []) if str(s).strip()]
+    resolver = dns.resolver.Resolver(configure=False)
+    if servers:
+        resolver.nameservers = servers
+    try:
+        answers = resolver.resolve(domain, rdtype, lifetime=5.0)
+        return [str(ans.address) for ans in answers]
+    except Exception:
+        pass
+    if servers:
+        return []
+    resolver_system = dns.resolver.Resolver(configure=True)
+    try:
+        answers = resolver_system.resolve(domain, rdtype, lifetime=5.0)
+        return [str(ans.address) for ans in answers]
+    except Exception:
+        return []
 
 
 def tcping_latency_ms(ip: str, port: int, timeout: float) -> float:

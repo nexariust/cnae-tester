@@ -2,7 +2,7 @@ import json
 import sys
 from typing import Any, Dict, List
 
-from evaluator import filter_ips_with_latency, to_bool, to_float, to_int
+from evaluator import filter_ips_with_latency, resolve_domain_to_ips, to_bool, to_float, to_int
 
 
 def to_result(success: bool, message: str, groups: List[Dict[str, Any]] = None):
@@ -37,8 +37,16 @@ def main():
         for group in groups:
             if not isinstance(group, dict):
                 continue
+            ips = [str(x).strip() for x in group.get("ips", []) if str(x).strip()]
+            domain = str(group.get("domain", "")).strip()
+            if not ips and domain:
+                ips = resolve_domain_to_ips(
+                    domain,
+                    str(group.get("query", "A")).strip() or "A",
+                    [str(x) for x in group.get("dnsServers", []) if str(x).strip()],
+                )
             items = filter_ips_with_latency(
-                ips=[str(x).strip() for x in group.get("ips", []) if str(x).strip()],
+                ips=ips,
                 max_count=to_int(group.get("maxCount", 50), 50),
                 tcp_check=to_bool(group.get("tcpCheck", True), True),
                 http_check=to_bool(group.get("httpCheck", False), False),
