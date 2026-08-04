@@ -40,9 +40,6 @@ def to_bool(value, fallback: bool) -> bool:
     return fallback
 
 
-FALLBACK_DNS_SERVERS = ["223.5.5.5", "119.29.29.29", "1.1.1.1", "8.8.8.8"]
-
-
 def resolve_domain_to_ips(domain: str, query_type: str, dns_servers: Optional[List[str]] = None) -> List[str]:
     domain = str(domain or "").strip().lower()
     if not domain:
