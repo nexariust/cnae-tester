@@ -2,6 +2,7 @@ import ipaddress
 import os
 import random
 import socket
+import ssl
 import time
 from functools import cmp_to_key
 from typing import Dict, List, Optional, Set, Tuple
@@ -101,6 +102,44 @@ def http_redirect_check(ip: str, host: str, timeout: float) -> bool:
     except Exception:
         return False
     return False
+
+
+def edgeone_https_check(ip: str, domain: str, timeout: float) -> Tuple[Optional[float], bool, str, str]:
+    try:
+        start = time.time()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect((ip, 443))
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        ssock = context.wrap_socket(sock, server_hostname=domain)
+        ssock.sendall(f"GET / HTTP/1.1\r\nHost: {domain}\r\nConnection: close\r\n\r\n".encode())
+        data = b""
+        while True:
+            chunk = ssock.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        ssock.close()
+        latency = (time.time() - start) * 1000
+        text = data.decode(errors="ignore")
+        if not text.startswith("HTTP/"):
+            return None, False, "", ""
+        server = ""
+        eo_uuid = ""
+        for line in text.split("\r\n"):
+            lower = line.lower()
+            if lower.startswith("server:"):
+                server = line.split(":", 1)[1].strip()
+            elif lower.startswith("eo-log-uuid:"):
+                eo_uuid = line.split(":", 1)[1].strip()
+        is_edgeone = (
+            "tencent-cos" in server.lower() or "edgeone" in server.lower()
+        ) and bool(eo_uuid)
+        return latency, is_edgeone, server, eo_uuid
+    except Exception:
+        return None, False, "", ""
 
 
 def group_by_subnet(ips: List[str]) -> Dict[str, List[str]]:
@@ -476,5 +515,79 @@ def filter_ips_with_latency(
         }
         if download_error_map.get(ip):
             item["downloadError"] = download_error_map[ip]
+        out.append(item)
+    return out
+
+
+def filter_ips_with_edgeone(
+    ips: List[str],
+    domain: str,
+    max_count: int,
+    tcp_timeout: float = 3.0,
+    tcp_threshold: int = 500,
+    min_latency_ms: int = 0,
+    tcp_batch_size: int = 150,
+    tcp_max_duration: int = 600,
+    tcp_target_count: int = 20,
+) -> List[Dict[str, object]]:
+    unique_ips = list(dict.fromkeys(ips))
+    if not unique_ips or max_count <= 0:
+        return []
+
+    pool = set(unique_ips)
+    passed: List[str] = []
+    latency_map: Dict[str, float] = {}
+    edgeone_map: Dict[str, bool] = {}
+    http_passed_map: Dict[str, bool] = {}
+    tried: Set[str] = set()
+    tried_ints: Set[int] = set()
+    start = time.time()
+    batch_size = max(1, int(tcp_batch_size))
+    max_duration = max(1, int(tcp_max_duration))
+    target_count = min(max_count, max(1, int(tcp_target_count)))
+    min_latency = max(0, int(min_latency_ms))
+
+    while len(passed) < target_count and time.time() - start < max_duration:
+        if not pool:
+            break
+        batch = random.sample(list(pool), min(batch_size, len(pool)))
+        for ip in batch:
+            pool.remove(ip)
+            tried.add(ip)
+            try:
+                tried_ints.add(int(ipaddress.ip_address(ip)))
+            except Exception:
+                continue
+        order = list(batch)
+        random.shuffle(order)
+
+        for ip in order:
+            if len(passed) >= max_count:
+                break
+            latency = None
+            latency = tcping_latency_ms(ip, 443, tcp_timeout)
+            if latency < 0 or latency > tcp_threshold or latency < min_latency:
+                continue
+            latency_map[ip] = latency
+            eo_latency, is_edgeone, server, eo_uuid = edgeone_https_check(ip, domain, tcp_timeout)
+            if eo_latency is not None:
+                latency_map[ip] = eo_latency
+            if not is_edgeone:
+                continue
+            edgeone_map[ip] = True
+            http_passed_map[ip] = True
+            passed.append(ip)
+
+    passed.sort(key=lambda ip: latency_map.get(ip, float("inf")))
+
+    out: List[Dict[str, object]] = []
+    for ip in passed[:max_count]:
+        latency = latency_map.get(ip)
+        item = {
+            "ip": ip,
+            "latencyMs": latency if latency is not None else None,
+            "httpPassed": http_passed_map.get(ip, False),
+            "isEdgeOne": edgeone_map.get(ip, False),
+        }
         out.append(item)
     return out
