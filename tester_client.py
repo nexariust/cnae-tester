@@ -1,9 +1,10 @@
+import ipaddress
 import json
 import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from socket import IPPROTO_TCP, SOL_SOCKET, SO_KEEPALIVE, TCP_KEEPIDLE, TCP_KEEPINTVL, TCP_KEEPCNT
 from typing import Any, Dict
@@ -14,6 +15,16 @@ import websocket
 
 REGISTER_PATH = "/api/testers/v1/register"
 WS_PATH = "/api/testers/v1/ws"
+
+# The console resolves the node's ISP from an IP; when the server URL goes
+# through a CDN (Cloudflare etc.) the connection-derived IP can be the CDN
+# edge, which resolves to "Cloudflare, Inc." instead of the node's ISP. The
+# node therefore reports its own public egress IP and the server prefers it.
+PUBLIC_IP_SOURCES = (
+    "https://api.ipify.org",
+    "https://ipinfo.io/ip",
+    "https://ifconfig.me/ip",
+)
 
 
 class WSAuthError(RuntimeError):
@@ -30,6 +41,7 @@ class Config:
     heartbeat_interval: float
     evaluator_path: Path
     origin: str
+    public_ip: str = field(default="")
 
 
 def env(name: str, default: str = "") -> str:
@@ -87,6 +99,36 @@ def log(message: str) -> None:
     print(f"[探测节点] {timestamp()} {message}", flush=True)
 
 
+def is_public_ip(text: str) -> bool:
+    try:
+        addr = ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    return not (
+        addr.is_private
+        or addr.is_loopback
+        or addr.is_unspecified
+        or addr.is_link_local
+        or addr.is_reserved
+        or addr.is_multicast
+    )
+
+
+def fetch_public_ip(session: requests.Session) -> str:
+    """Ask public echo services for this node's own egress IP. Empty on failure."""
+    for url in PUBLIC_IP_SOURCES:
+        try:
+            response = session.get(url, timeout=8, headers={"User-Agent": "cnae-tester"})
+            if response.status_code != 200:
+                continue
+            candidate = response.text.strip()
+            if is_public_ip(candidate):
+                return candidate
+        except Exception:
+            continue
+    return ""
+
+
 def parse_error(response: requests.Response) -> str:
     try:
         payload = response.json()
@@ -125,9 +167,12 @@ def register_tester(session: requests.Session, cfg: Config) -> str:
     if not cfg.bootstrap_token:
         raise RuntimeError("首次注册必须设置 TESTER_BOOTSTRAP_TOKEN")
     url = cfg.server_url + REGISTER_PATH
+    payload: Dict[str, Any] = {}
+    if cfg.public_ip:
+        payload["publicIp"] = cfg.public_ip
     response = session.post(
         url,
-        json={},
+        json=payload,
         headers={
             "X-Tester-Bootstrap-Token": cfg.bootstrap_token,
             "Origin": cfg.origin,
@@ -268,12 +313,15 @@ def run_ws_session(cfg: Config, token: str) -> None:
     ws = connect_ws(cfg, token)
     ws.settimeout(cfg.heartbeat_interval)
     log(f"已连接到 WebSocket 通道：{cfg.ws_url}")
+    heartbeat: Dict[str, Any] = {"type": "heartbeat"}
+    if cfg.public_ip:
+        heartbeat["ip"] = cfg.public_ip
     next_heartbeat_at = time.monotonic()
     try:
         while True:
             now = time.monotonic()
             if now >= next_heartbeat_at:
-                send_ws_message(ws, {"type": "heartbeat"})
+                send_ws_message(ws, heartbeat)
                 next_heartbeat_at = now + cfg.heartbeat_interval
             try:
                 raw_message = ws.recv()
@@ -324,6 +372,12 @@ def main() -> int:
     backoff = 1.0
     while True:
         try:
+            if not cfg.public_ip:
+                cfg.public_ip = fetch_public_ip(session)
+                if cfg.public_ip:
+                    log(f"已获取本机公网出口 IP：{cfg.public_ip}")
+                else:
+                    log("获取本机公网出口 IP 失败，将使用服务端从连接推导的 IP")
             if not token:
                 token = register_tester(session, cfg)
             run_ws_session(cfg, token)
